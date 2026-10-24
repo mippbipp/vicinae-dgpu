@@ -34,22 +34,24 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable (lib.mkMerge [
-    {
-      home.packages = [ cfg.package ];
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
+      {
+        home.packages = [ cfg.package ];
 
-      systemd.user.services.dgpu-reconcile = {
-        Unit.Description = "Reconcile dGPU wrapper desktop entries";
-        Service = {
-          Type = "oneshot";
-          ExecStart = lib.getExe cfg.package;
+        systemd.user.services.dgpu-reconcile = {
+          Unit.Description = "Reconcile dGPU wrapper desktop entries";
+          Service = {
+            Type = "oneshot";
+            ExecStart = lib.getExe cfg.package;
+          };
+          Install.WantedBy = [ "default.target" ];
         };
-        Install.WantedBy = [ "default.target" ];
-      };
-    }
+      }
 
-    (lib.mkIf (cfg.vicinae.enable && config.programs ? vicinae) {
-      programs.vicinae.extensions = [ cfg.extension ];
-    })
-  ]);
+      (lib.mkIf (cfg.vicinae.enable && config.programs ? vicinae) {
+        programs.vicinae.extensions = [ cfg.extension ];
+      })
+    ]
+  );
 }

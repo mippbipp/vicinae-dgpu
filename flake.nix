@@ -17,11 +17,7 @@
         "aarch64-linux"
       ];
 
-      forAllSystems =
-        f:
-        nixpkgs.lib.genAttrs systems (
-          system: f system nixpkgs.legacyPackages.${system}
-        );
+      forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system nixpkgs.legacyPackages.${system});
 
       mkDgpu = pkgs: pkgs.callPackage ./package.nix { inherit inputs; };
 
