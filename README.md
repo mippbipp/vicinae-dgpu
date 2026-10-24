@@ -79,10 +79,16 @@ The source search order is the user applications directory, then `XDG_DATA_DIRS`
 ## Development
 
 ```sh
+cd app
 npm ci
 npm test
 npm run typecheck
 npm run build
+```
+
+Then build both Nix outputs from the repo root:
+
+```sh
 nix build .#cli
 nix build .#extension
 ```
