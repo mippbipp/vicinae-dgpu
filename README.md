@@ -7,10 +7,11 @@ The wrappers are ordinary XDG desktop entries, so any launcher can read them. Vi
 ## What it does
 
 - Reads the registry at `~/.config/caelestia/dgpu.json`.
-- Writes `<app> (dGPU).desktop` into `~/.local/share/applications`.
+- Writes `<app> (dGPU).desktop` into `~/.local/share/applications`, through a temporary file and a rename.
 - Runs the app with `__NV_PRIME_RENDER_OFFLOAD=1`, `__GLX_VENDOR_LIBRARY_NAME=nvidia`, and `__VK_LAYER_NV_optimus=NVIDIA_only`.
-- Marks wrappers with `X-Caelestia-DGPU-Source` so stale entries are removed when the source disappears or the entry is removed.
-- Reconciles when the Vicinae command opens and whenever the CLI runs.
+- Adds ` (dGPU)` to every `Name`, localized ones included, and drops `DBusActivatable`, which would let a launcher skip `Exec`. Desktop actions keep their original `Exec`.
+- Marks wrappers with `X-Caelestia-DGPU-Source`. A marked file is removed when its source disappears, its app is unassigned, or its filename does not match its source.
+- Reconciles when the Vicinae command opens and whenever the CLI runs. A failure on one entry does not stop the others.
 
 The registry shape is:
 
@@ -24,7 +25,7 @@ The registry shape is:
 
 Other keys in the registry are preserved. The registry is a sidecar file. Caelestia shell does not need to read it.
 
-Vicinae does not let an extension add actions to the built-in Applications results, so this ships a separate command. The command lists installed desktop entries and adds or removes their dGPU entries.
+Vicinae does not let an extension add actions to the built-in Applications results, so this ships a separate command. The command lists installed desktop entries and adds or removes their dGPU entries. Each row shows one of four states: no dGPU entry, dGPU entry added, desktop file not found, or dGPU entry not written. `Launch on dGPU` runs the dGPU entry with `gio launch`, so `gio` from glib has to be on Vicinae's `PATH`.
 
 ## Install with Home Manager
 
@@ -63,7 +64,9 @@ dgpu set com.visualstudio.code.desktop off
 dgpu
 ```
 
-The last command reconciles from the registry. Flags that override paths:
+The last command reconciles from the registry and exits non-zero if any dGPU entry could not be written or removed. `set ... on` takes a source desktop entry id and refuses a dGPU entry's own id. If it cannot find the app's desktop file, it still records the assignment and prints a warning.
+
+Flags that override paths:
 
 ```sh
 dgpu set <desktop-id> on \
@@ -72,7 +75,7 @@ dgpu set <desktop-id> on \
   --source-dirs /a/applications:/b/applications
 ```
 
-The source search order is the user applications directory, then `XDG_DATA_DIRS`, then `/usr/local/share/applications` and `/usr/share/applications`. The user applications directory wins, so a local override in `~/.local/share/applications` shadows a system entry.
+The source search order is the user applications directory, then `XDG_DATA_DIRS`, then `/usr/local/share/applications` and `/usr/share/applications`. The user applications directory wins, so a local override in `~/.local/share/applications` shadows a system entry. A file in a subdirectory, such as `kde/foo.desktop`, is found under `kde-foo.desktop` and under `kde.foo.desktop`, the name Vicinae gives it.
 
 ## Development
 
@@ -109,7 +112,7 @@ vicinae-dgpu/
 │   ├── extension/   # Vicinae command (manifest, assets, src/apps.tsx)
 │   └── cli/         # dgpu CLI (effect/cli)
 ├── packages/
-│   ├── core/        # registry, wrapper entries, reconcile; shared by both apps
+│   ├── core/        # registry, dGPU entries, reconcile, launch; shared by both apps
 │   └── config/      # shared tsconfig.base.json
 ├── tools/
 │   └── oxlint/      # vendored anti-slop oxlint plugins
