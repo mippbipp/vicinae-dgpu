@@ -1,6 +1,6 @@
 # vicinae-dgpu
 
-Per-app dGPU launch wrappers for NixOS. The Vicinae command toggles PRIME render offload for one app at a time. The `dgpu` CLI and the login reconcile service come from the same package.
+Per-app dGPU launch wrappers for NixOS. The Vicinae command toggles PRIME render offload for one app at a time. The `dgpu` CLI and the Vicinae extension come from the same package.
 
 The wrappers are ordinary XDG desktop entries, so any launcher can read them. Vicinae is optional for the CLI.
 
@@ -10,7 +10,7 @@ The wrappers are ordinary XDG desktop entries, so any launcher can read them. Vi
 - Writes `<app> (dGPU).desktop` into `~/.local/share/applications`.
 - Runs the app with `__NV_PRIME_RENDER_OFFLOAD=1`, `__GLX_VENDOR_LIBRARY_NAME=nvidia`, and `__VK_LAYER_NV_optimus=NVIDIA_only`.
 - Marks wrappers with `X-Caelestia-DGPU-Source` so stale entries are removed when the source disappears or the app is toggled off.
-- Reconciles at login and when the Vicinae command opens.
+- Reconciles when the Vicinae command opens and whenever the CLI runs.
 
 The registry shape is:
 
@@ -38,22 +38,27 @@ vicinae-dgpu = {
 };
 ```
 
-Import the module and enable it:
+Import the module, enable it, and add the extension to the Vicinae module's `extensions` option:
 
 ```nix
+{ config, ... }:
 {
   imports = [ inputs.vicinae-dgpu.homeManagerModules.default ];
   services.dgpu.enable = true;
+  programs.vicinae.extensions = [ config.services.dgpu.extension ];
 }
 ```
 
-The module installs the `dgpu` CLI, a `dgpu-reconcile.service` user service, and the Vicinae command when the Vicinae Home Manager module is present.
+The `programs.vicinae` module comes from Vicinae's Home Manager module. The dgpu module installs the CLI and exposes the extension package. It does not install Vicinae or the extension.
+
+If your Vicinae configuration lives in its own Home Manager module, add `config.services.dgpu.extension` to that module's `programs.vicinae.extensions` list.
+
+If you do not import the dgpu module in the same Home Manager configuration, use `inputs.vicinae-dgpu.packages.${pkgs.stdenv.hostPlatform.system}.extension` instead.
 
 Useful options:
 
-- `services.dgpu.vicinae.enable = false` skips the Vicinae command.
 - `services.dgpu.package` overrides the CLI package.
-- `services.dgpu.extension` overrides the extension package.
+- `services.dgpu.extension` is the extension package to add to `programs.vicinae.extensions`.
 
 The module does not install Vicinae itself.
 

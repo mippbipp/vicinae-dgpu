@@ -24,34 +24,11 @@ in
       type = lib.types.package;
       default = dgpu.extension;
       defaultText = lib.literalMD "the dgpu Vicinae extension package";
-      description = "The Vicinae extension package.";
-    };
-
-    vicinae.enable = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = "Install the Vicinae command when the Vicinae Home Manager module is imported.";
+      description = "The Vicinae extension package. Add it to programs.vicinae.extensions.";
     };
   };
 
-  config = lib.mkIf cfg.enable (
-    lib.mkMerge [
-      {
-        home.packages = [ cfg.package ];
-
-        systemd.user.services.dgpu-reconcile = {
-          Unit.Description = "Reconcile dGPU wrapper desktop entries";
-          Service = {
-            Type = "oneshot";
-            ExecStart = lib.getExe cfg.package;
-          };
-          Install.WantedBy = [ "default.target" ];
-        };
-      }
-
-      (lib.mkIf (cfg.vicinae.enable && config.programs ? vicinae) {
-        programs.vicinae.extensions = [ cfg.extension ];
-      })
-    ]
-  );
+  config = lib.mkIf cfg.enable {
+    home.packages = [ cfg.package ];
+  };
 }
