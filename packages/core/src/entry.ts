@@ -108,7 +108,9 @@ const addOffload = (value: string): string =>
 
 /**
  * Rewrites one `[Desktop Entry]` line for the dGPU entry. Returns `undefined`
- * for lines the dGPU entry drops: a stale marker copied from the source.
+ * for lines the dGPU entry drops: a stale marker copied from the source, and
+ * `DBusActivatable`, which lets a launcher start the app over D-Bus without
+ * running `Exec` and its offload variables.
  */
 const rewriteMainGroupLine = (line: string): string | undefined => {
   const entry = parseKeyValue(line);
@@ -125,6 +127,7 @@ const rewriteMainGroupLine = (line: string): string | undefined => {
     case "Exec":
       return `Exec=${addOffload(entry.value)}`;
     case MARKER_KEY:
+    case "DBusActivatable":
       return undefined;
     default:
       return line;

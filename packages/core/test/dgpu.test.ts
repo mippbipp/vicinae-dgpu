@@ -426,6 +426,27 @@ layer(NodeServices.layer)("dGPU", (it) => {
     })
   );
 
+  it.effect("drops DBusActivatable so launchers run Exec", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ registryFixture: "one-app.json" });
+
+      yield* harness.fs.writeFileString(
+        harness.path.join(harness.sourceDir, "com.visualstudio.code.desktop"),
+        "[Desktop Entry]\nName=Code\nExec=code %U\nDBusActivatable=true\n"
+      );
+
+      yield* harness.dgpu.reconcile;
+
+      const content = yield* readText(
+        harness,
+        wrapperPath(harness, "com.visualstudio.code.desktop")
+      );
+
+      assert.notInclude(content, "DBusActivatable");
+      assert.include(content, `Exec=${OFFLOAD_PREFIX} code %U\n`);
+    })
+  );
+
   it.effect("does not double-wrap an existing env prefix", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness({ registryFixture: "one-app.json" });
