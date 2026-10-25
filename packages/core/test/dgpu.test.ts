@@ -12,8 +12,8 @@ import {
 } from "effect";
 
 import { DgpuConfig } from "../src/config.js";
-import { wrapperFilename } from "../src/desktop.js";
 import { Dgpu } from "../src/dgpu.js";
+import { entryFilename } from "../src/entry.js";
 
 const FIXTURES = new URL("fixtures/", import.meta.url);
 
@@ -89,7 +89,7 @@ const makeHarness = Effect.fn("makeHarness")(function* (
 type Harness = Effect.Success<ReturnType<typeof makeHarness>>;
 
 const wrapperPath = (harness: Harness, entryId: string): string =>
-  harness.path.join(harness.applicationsDir, wrapperFilename(entryId));
+  harness.path.join(harness.applicationsDir, entryFilename(entryId));
 
 const readText = (harness: Harness, filePath: string) =>
   harness.fs.readFileString(filePath);
@@ -354,12 +354,12 @@ layer(NodeServices.layer)("dGPU", (it) => {
     })
   );
 
-  it("builds wrapper filenames from desktop ids", () => {
+  it("builds dGPU entry filenames from desktop ids", () => {
     assert.strictEqual(
-      wrapperFilename("com.visualstudio.code.desktop"),
+      entryFilename("com.visualstudio.code.desktop"),
       "com.visualstudio.code (dGPU).desktop"
     );
-    assert.strictEqual(wrapperFilename("myapp"), "myapp (dGPU).desktop");
+    assert.strictEqual(entryFilename("myapp"), "myapp (dGPU).desktop");
   });
 
   it.effect("only owns markers in the main desktop group", () =>

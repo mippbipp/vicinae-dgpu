@@ -2,10 +2,9 @@ import type { FileSystem } from "effect";
 import { Context, Effect, Layer, Path } from "effect";
 
 import { DgpuConfig } from "./config.js";
-import { wrapperFilename } from "./desktop.js";
+import { entryFilename, reconcileEntries } from "./entry.js";
 import type { DgpuError } from "./errors.js";
 import {
-  applyRegistry,
   assignedDgpuIds,
   readRegistry,
   setAssignment,
@@ -24,8 +23,8 @@ export interface DgpuService {
 
 /**
  * Filesystem-backed dGPU domain service. The Vicinae command and the CLI both
- * use this service, so there is one implementation of the registry and wrapper
- * rules.
+ * use this service, so there is one implementation of the registry and dGPU
+ * entry rules.
  */
 export class Dgpu extends Context.Service<Dgpu, DgpuService>()(
   "@vicinae-dgpu/core/dgpu"
@@ -47,7 +46,8 @@ export class Dgpu extends Context.Service<Dgpu, DgpuService>()(
       );
 
       const reconcile = readRegistry.pipe(
-        Effect.flatMap(applyRegistry),
+        Effect.map(assignedDgpuIds),
+        Effect.flatMap(reconcileEntries),
         Effect.withSpan("Dgpu.reconcile"),
         Effect.provideContext(context)
       );
@@ -62,7 +62,7 @@ export class Dgpu extends Context.Service<Dgpu, DgpuService>()(
           yield* writeRegistry(next.registry);
         }
 
-        yield* applyRegistry(next.registry);
+        yield* reconcileEntries(assignedDgpuIds(next.registry));
       }, Effect.provideContext(context));
 
       return Dgpu.of({
@@ -70,7 +70,7 @@ export class Dgpu extends Context.Service<Dgpu, DgpuService>()(
         reconcile,
         set,
         wrapperPath: (entryId) =>
-          path.join(config.applicationsDir, wrapperFilename(entryId)),
+          path.join(config.applicationsDir, entryFilename(entryId)),
       });
     })
   );
