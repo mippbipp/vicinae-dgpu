@@ -271,6 +271,34 @@ layer(NodeServices.layer)("dGPU", (it) => {
     })
   );
 
+  it.effect("replaces a changed dGPU entry instead of writing in place", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ registryFixture: "one-app.json" });
+      const entry = wrapperPath(harness, "com.visualstudio.code.desktop");
+      const link = harness.path.join(harness.root, "linked.desktop");
+
+      yield* harness.dgpu.reconcile;
+      yield* harness.fs.link(entry, link);
+
+      const before = yield* readText(harness, link);
+
+      yield* harness.fs.writeFileString(
+        harness.path.join(harness.sourceDir, "com.visualstudio.code.desktop"),
+        "[Desktop Entry]\nName=Code\nExec=code-insiders %U\n"
+      );
+      yield* harness.dgpu.reconcile;
+
+      // A rename gives the entry a new inode, so the old hard link keeps the
+      // old content. An in-place write would change both.
+      assert.strictEqual(yield* readText(harness, link), before);
+      assert.include(yield* readText(harness, entry), "code-insiders");
+      assert.deepStrictEqual(
+        yield* directoryEntries(harness, harness.applicationsDir),
+        ["com.visualstudio.code (dGPU).desktop"]
+      );
+    })
+  );
+
   it.effect("removes a wrapper when its app is no longer assigned", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness({ registryFixture: "two-apps.json" });

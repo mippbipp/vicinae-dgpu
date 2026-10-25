@@ -3,7 +3,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { DgpuConfig } from "./config.js";
 import { DgpuError } from "./errors.js";
-import { failWith, isFile, readText } from "./files.js";
+import { failWith, isFile, readText, writeTextAtomically } from "./files.js";
 
 /**
  * The dGPU entry: a copy of an app's desktop entry whose `Exec` runs on the
@@ -210,7 +210,6 @@ const syncEntry = Effect.fn("syncEntry")(function* (
     });
   }
 
-  const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const config = yield* DgpuConfig;
   const source = yield* findSource(entryId);
@@ -219,15 +218,10 @@ const syncEntry = Effect.fn("syncEntry")(function* (
     return "missing-source";
   }
 
-  const target = path.join(config.applicationsDir, entryFilename(entryId));
-  const contents = buildEntry(yield* readText(source.value), entryId);
-  const current = (yield* isFile(target)) ? yield* readText(target) : undefined;
-
-  if (current !== contents) {
-    yield* fs
-      .writeFileString(target, contents)
-      .pipe(Effect.mapError(failWith(`cannot write ${target}`)));
-  }
+  yield* writeTextAtomically(
+    path.join(config.applicationsDir, entryFilename(entryId)),
+    buildEntry(yield* readText(source.value), entryId)
+  );
 
   return "added";
 });
