@@ -30,8 +30,8 @@
   "commands": [
     {
       "name": "apps",
-      "title": "dGPU Apps",
-      "description": "Turn PRIME render offload on or off for installed applications.",
+      "title": "Manage dGPU entries",
+      "description": "Add or remove dGPU launch entries for installed applications.",
       "mode": "view"
     }
   ],

@@ -104,13 +104,13 @@ export default function DgpuApps() {
       await showToast({
         style: Toast.Style.Success,
         title: enabled
-          ? `${app.name} now launches on the dGPU`
-          : `${app.name} back on the iGPU`,
+          ? `Added dGPU entry for ${app.name}`
+          : `Removed dGPU entry for ${app.name}`,
       });
     } catch (cause) {
       await showToast({
         style: Toast.Style.Failure,
-        title: "dGPU toggle failed",
+        title: "Could not change dGPU entry",
         message: errorMessage(cause),
       });
     }
@@ -150,29 +150,28 @@ export default function DgpuApps() {
       searchBarPlaceholder="Search applications..."
       navigationTitle="dGPU Apps"
     >
-      <List.Section title="Applications" subtitle={`${enabledCount} on dGPU`}>
+      <List.Section
+        title="Applications"
+        subtitle={`${enabledCount} dGPU ${enabledCount === 1 ? "entry" : "entries"}`}
+      >
         {apps.map((app) => {
           const enabled = assigned.has(app.id);
           return (
             <List.Item
               key={app.id}
               title={app.name}
-              subtitle={
-                enabled
-                  ? "Launches with PRIME render offload"
-                  : "Launches normally"
-              }
+              subtitle={enabled ? "dGPU entry added" : "No dGPU entry"}
               icon={app.icon ? { source: app.icon } : Icon.AppWindow}
               accessories={
                 enabled
-                  ? [{ icon: Icon.CheckCircle, tooltip: "dGPU enabled" }]
+                  ? [{ icon: Icon.CheckCircle, tooltip: "dGPU entry added" }]
                   : []
               }
               actions={
                 <ActionPanel>
                   <Action
-                    title={enabled ? "Disable dGPU" : "Enable dGPU"}
-                    icon={enabled ? Icon.XMarkCircle : Icon.CheckCircle}
+                    title={enabled ? "Remove entry" : "Add entry"}
+                    icon={enabled ? Icon.Trash : Icon.PlusCircle}
                     onAction={() => toggle(app, !enabled)}
                   />
                   {enabled && (
