@@ -354,13 +354,110 @@ layer(NodeServices.layer)("dGPU", (it) => {
     })
   );
 
-  it("builds dGPU entry filenames from desktop ids", () => {
-    assert.strictEqual(
-      entryFilename("com.visualstudio.code.desktop"),
-      "com.visualstudio.code (dGPU).desktop"
-    );
-    assert.strictEqual(entryFilename("myapp"), "myapp (dGPU).desktop");
-  });
+  it.effect("set rejects ids that are not source entry ids", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+
+      for (const entryId of [
+        "myapp",
+        "com.visualstudio.code (dGPU).desktop",
+        "../escape.desktop",
+      ]) {
+        const message = yield* failureMessage(harness.dgpu.set(entryId, true));
+
+        assert.include(message, "is not a source desktop entry id");
+      }
+
+      assert.isFalse(yield* harness.fs.exists(harness.registryPath));
+    })
+  );
+
+  it.effect("set off clears an assignment the reconcile rejects", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+      const invalid = "com.visualstudio.code (dGPU).desktop";
+
+      yield* harness.fs.writeFileString(
+        harness.registryPath,
+        `{"apps": {"${invalid}": "dGPU"}}`
+      );
+
+      assert.include(
+        yield* failureMessage(harness.dgpu.reconcile),
+        "is not a source desktop entry id"
+      );
+
+      yield* harness.dgpu.set(invalid, false);
+      yield* harness.dgpu.reconcile;
+
+      assert.deepStrictEqual((yield* readRegistryJson(harness)).apps, {});
+    })
+  );
+
+  it.effect("snapshot reports the status of each source entry", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+
+      yield* harness.fs.writeFileString(
+        harness.registryPath,
+        '{"apps": {"com.visualstudio.code.desktop": "dGPU", "org.only.ghost.desktop": "dGPU"}}'
+      );
+
+      const snapshot = yield* harness.dgpu.snapshot([
+        "com.visualstudio.code.desktop",
+        "org.mozilla.firefox.desktop",
+        "com.visualstudio.code (dGPU).desktop",
+        "org.only.ghost.desktop",
+        "not-a-desktop-id",
+      ]);
+
+      assert.deepStrictEqual(
+        [...snapshot.statuses],
+        [
+          ["com.visualstudio.code.desktop", "added"],
+          ["org.mozilla.firefox.desktop", "none"],
+          ["org.only.ghost.desktop", "missing-source"],
+        ]
+      );
+      assert.deepStrictEqual(snapshot.failures, []);
+    })
+  );
+
+  it.effect("snapshot reports an entry it could not write", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ registryFixture: "two-apps.json" });
+      const stale = wrapperPath(harness, "org.mozilla.firefox.desktop");
+
+      // A directory where the file should go makes the write fail.
+      yield* harness.fs.makeDirectory(
+        wrapperPath(harness, "com.visualstudio.code.desktop")
+      );
+      yield* harness.fs.writeFileString(
+        stale,
+        "[Desktop Entry]\nX-Caelestia-DGPU-Source=org.mozilla.firefox.desktop\n"
+      );
+
+      const snapshot = yield* harness.dgpu.snapshot([
+        "com.visualstudio.code.desktop",
+        "com.valvesoftware.Steam.desktop",
+      ]);
+
+      assert.deepStrictEqual(
+        [...snapshot.statuses],
+        [
+          ["com.visualstudio.code.desktop", "failed"],
+          ["com.valvesoftware.Steam.desktop", "added"],
+        ]
+      );
+      assert.lengthOf(snapshot.failures, 1);
+      assert.include(snapshot.failures[0]?.message, "cannot write");
+      assert.isFalse(yield* harness.fs.exists(stale));
+      assert.include(
+        yield* failureMessage(harness.dgpu.reconcile),
+        "cannot write"
+      );
+    })
+  );
 
   it.effect("only owns markers in the main desktop group", () =>
     Effect.gen(function* () {
@@ -404,7 +501,10 @@ layer(NodeServices.layer)("dGPU", (it) => {
     Effect.gen(function* () {
       const harness = yield* makeHarness({ registryFixture: "two-apps.json" });
 
-      yield* harness.dgpu.set("org.mozilla.firefox.desktop", true);
+      assert.strictEqual(
+        yield* harness.dgpu.set("org.mozilla.firefox.desktop", true),
+        "added"
+      );
 
       const data = yield* readRegistryJson(harness);
 
@@ -451,7 +551,10 @@ layer(NodeServices.layer)("dGPU", (it) => {
     Effect.gen(function* () {
       const harness = yield* makeHarness({ registryFixture: "two-apps.json" });
 
-      yield* harness.dgpu.set("com.valvesoftware.Steam.desktop", false);
+      assert.strictEqual(
+        yield* harness.dgpu.set("com.valvesoftware.Steam.desktop", false),
+        "none"
+      );
 
       const data = yield* readRegistryJson(harness);
 
@@ -579,7 +682,10 @@ layer(NodeServices.layer)("dGPU", (it) => {
     Effect.gen(function* () {
       const harness = yield* makeHarness();
 
-      yield* harness.dgpu.set("org.only.ghost.desktop", true);
+      assert.strictEqual(
+        yield* harness.dgpu.set("org.only.ghost.desktop", true),
+        "missing-source"
+      );
 
       const data = yield* readRegistryJson(harness);
 

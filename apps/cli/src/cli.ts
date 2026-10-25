@@ -1,7 +1,7 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { DgpuConfig } from "@vicinae-dgpu/core/config";
 import { Dgpu } from "@vicinae-dgpu/core/dgpu";
-import { Effect, Layer, Option } from "effect";
+import { Console, Effect, Layer, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 
 const commonFlags = {
@@ -52,8 +52,13 @@ const setCommand = Command.make(
   },
   Effect.fn(function* ({ entryId, value }) {
     const dgpu = yield* Dgpu;
+    const status = yield* dgpu.set(entryId, value === "on");
 
-    yield* dgpu.set(entryId, value === "on");
+    if (status === "missing-source") {
+      yield* Console.error(
+        `dgpu: assigned ${entryId}, but found no desktop file for it; its dGPU entry appears once the file exists`
+      );
+    }
   })
 ).pipe(Command.provide((input) => dgpuFromFlags(input)));
 

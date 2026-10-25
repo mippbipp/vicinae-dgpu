@@ -1,6 +1,7 @@
-import { Effect, FileSystem, Option, Path } from "effect";
+import { Effect, FileSystem, Option, Path, Result } from "effect";
 
 import { DgpuConfig } from "./config.js";
+import { DgpuError } from "./errors.js";
 import { failWith, isFile, readText } from "./files.js";
 
 /**
@@ -8,6 +9,16 @@ import { failWith, isFile, readText } from "./files.js";
  * dGPU. This module owns its filename, its content, the marker that ties it to
  * its source entry, the source lookup, and the sweep of stale entries.
  */
+
+/**
+ * - `none`: the app is not assigned to the dGPU.
+ * - `added`: the dGPU entry exists.
+ * - `missing-source`: the app is assigned, but no source entry was found.
+ * - `failed`: the app is assigned, but its dGPU entry could not be written.
+ */
+export type EntryStatus = "none" | "added" | "missing-source" | "failed";
+
+type AssignedStatus = Exclude<EntryStatus, "none">;
 
 const OFFLOAD_ENV = [
   "__NV_PRIME_RENDER_OFFLOAD=1",
@@ -72,6 +83,16 @@ export const entryFilename = (entryId: string): string => {
 
 const isEntryFilename = (name: string): boolean =>
   name.endsWith(`${ENTRY_SUFFIX}${DESKTOP_EXT}`);
+
+/**
+ * Whether `entryId` names an app's own desktop entry: a desktop file id that
+ * is not itself a dGPU entry and cannot escape the applications dir.
+ */
+export const isSourceEntryId = (entryId: string): boolean =>
+  entryId.length > DESKTOP_EXT.length &&
+  entryId.endsWith(DESKTOP_EXT) &&
+  !isEntryFilename(entryId) &&
+  !entryId.includes("/");
 
 const addOffload = (value: string): string =>
   `${OFFLOAD_PREFIX}${value.startsWith(ENV_COMMAND) ? value.slice(ENV_COMMAND.length) : value}`;
@@ -174,15 +195,31 @@ const findSource = Effect.fn("findSource")(function* (entryId: string) {
   return Option.none<string>();
 });
 
-const writeEntry = Effect.fn("writeEntry")(function* (
-  entryId: string,
-  source: string
-) {
+/** Writes the dGPU entry for one assigned id, if its source entry exists. */
+const syncEntry = Effect.fn("syncEntry")(function* (
+  entryId: string
+): Effect.fn.Return<
+  AssignedStatus,
+  DgpuError,
+  DgpuConfig | FileSystem.FileSystem | Path.Path
+> {
+  if (!isSourceEntryId(entryId)) {
+    return yield* DgpuError.make({
+      message: `the registry assigns ${entryId}, which is not a source desktop entry id`,
+    });
+  }
+
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const config = yield* DgpuConfig;
+  const source = yield* findSource(entryId);
+
+  if (Option.isNone(source)) {
+    return "missing-source";
+  }
+
   const target = path.join(config.applicationsDir, entryFilename(entryId));
-  const contents = buildEntry(yield* readText(source), entryId);
+  const contents = buildEntry(yield* readText(source.value), entryId);
   const current = (yield* isFile(target)) ? yield* readText(target) : undefined;
 
   if (current !== contents) {
@@ -190,19 +227,21 @@ const writeEntry = Effect.fn("writeEntry")(function* (
       .writeFileString(target, contents)
       .pipe(Effect.mapError(failWith(`cannot write ${target}`)));
   }
+
+  return "added";
 });
 
-/** Removes a dGPU entry whose source is no longer assigned or present. */
+/** Removes a dGPU entry whose source entry is not in `keep`. */
 const removeIfStale = Effect.fn("removeIfStale")(function* (
   target: string,
-  sources: ReadonlyMap<string, string>
+  keep: ReadonlySet<string>
 ) {
   const fs = yield* FileSystem.FileSystem;
 
   if (yield* isFile(target)) {
     const sourceId = markedSourceId(yield* readText(target));
 
-    if (sourceId !== undefined && !sources.has(sourceId)) {
+    if (sourceId !== undefined && !keep.has(sourceId)) {
       yield* fs
         .remove(target, { force: true })
         .pipe(Effect.mapError(failWith(`cannot remove ${target}`)));
@@ -210,9 +249,18 @@ const removeIfStale = Effect.fn("removeIfStale")(function* (
   }
 });
 
+export interface Reconciled {
+  /** The status of every assigned id. */
+  readonly statuses: ReadonlyMap<string, AssignedStatus>;
+  /** Entries that could not be written, read or removed. */
+  readonly failures: readonly DgpuError[];
+}
+
 /**
  * Writes a dGPU entry for every assigned id whose source entry exists, then
- * removes the dGPU entries this tool owns that no longer have one.
+ * removes the dGPU entries this tool owns that no longer have one. A failure
+ * on one entry does not stop the others or the sweep; it is reported in
+ * `failures`. Only a failure on the applications dir itself fails the run.
  */
 export const reconcileEntries = Effect.fn("reconcileEntries")(function* (
   assigned: ReadonlySet<string>
@@ -220,23 +268,30 @@ export const reconcileEntries = Effect.fn("reconcileEntries")(function* (
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const { applicationsDir } = yield* DgpuConfig;
-  const sources = new Map<string, string>();
-
-  for (const entryId of assigned) {
-    const source = yield* findSource(entryId);
-
-    if (Option.isSome(source)) {
-      sources.set(entryId, source.value);
-    }
-  }
+  const statuses = new Map<string, AssignedStatus>();
+  const failures: DgpuError[] = [];
 
   yield* fs
     .makeDirectory(applicationsDir, { recursive: true })
     .pipe(Effect.mapError(failWith(`cannot create ${applicationsDir}`)));
 
-  for (const [entryId, source] of sources) {
-    yield* writeEntry(entryId, source);
+  for (const entryId of assigned) {
+    const result = yield* Effect.result(syncEntry(entryId));
+
+    if (Result.isSuccess(result)) {
+      statuses.set(entryId, result.success);
+    } else {
+      statuses.set(entryId, "failed");
+      failures.push(result.failure);
+    }
   }
+
+  // A failed write may leave last run's entry in place, which still launches.
+  const keep = new Set(
+    [...statuses].flatMap(([entryId, status]) =>
+      status === "missing-source" ? [] : [entryId]
+    )
+  );
 
   const names = yield* fs
     .readDirectory(applicationsDir)
@@ -244,7 +299,17 @@ export const reconcileEntries = Effect.fn("reconcileEntries")(function* (
 
   for (const name of names) {
     if (isEntryFilename(name)) {
-      yield* removeIfStale(path.join(applicationsDir, name), sources);
+      const result = yield* Effect.result(
+        removeIfStale(path.join(applicationsDir, name), keep)
+      );
+
+      if (Result.isFailure(result)) {
+        failures.push(result.failure);
+      }
     }
   }
+
+  const reconciled: Reconciled = { statuses, failures };
+
+  return reconciled;
 });
