@@ -618,6 +618,29 @@ layer(NodeServices.layer)("dGPU", (it) => {
     })
   );
 
+  it.effect("removes a marked entry with the wrong filename", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ registryFixture: "one-app.json" });
+
+      const misnamed = harness.path.join(
+        harness.applicationsDir,
+        "Code (dGPU).desktop"
+      );
+
+      yield* harness.fs.writeFileString(
+        misnamed,
+        "[Desktop Entry]\nX-Caelestia-DGPU-Source=com.visualstudio.code.desktop\nName=Code\n"
+      );
+
+      yield* harness.dgpu.reconcile;
+
+      assert.deepStrictEqual(
+        yield* directoryEntries(harness, harness.applicationsDir),
+        ["com.visualstudio.code (dGPU).desktop"]
+      );
+    })
+  );
+
   it.effect("only owns markers in the main desktop group", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness({ registryFixture: "none.json" });

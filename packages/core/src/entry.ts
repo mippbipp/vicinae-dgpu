@@ -292,17 +292,24 @@ const syncEntry = Effect.fn("syncEntry")(function* (
   return "added";
 });
 
-/** Removes a dGPU entry whose source entry is not in `keep`. */
+/**
+ * Removes a dGPU entry this tool owns whose source entry is not in `keep`, or
+ * whose filename is not the one its source entry gets.
+ */
 const removeIfStale = Effect.fn("removeIfStale")(function* (
   target: string,
   keep: ReadonlySet<string>
 ) {
   const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
 
   if (yield* isFile(target)) {
     const sourceId = markedSourceId(yield* readText(target));
 
-    if (sourceId !== undefined && !keep.has(sourceId)) {
+    if (
+      sourceId !== undefined &&
+      (!keep.has(sourceId) || path.basename(target) !== entryFilename(sourceId))
+    ) {
       yield* fs
         .remove(target, { force: true })
         .pipe(Effect.mapError(failWith(`cannot remove ${target}`)));
