@@ -203,6 +203,43 @@ const markedSourceId = (contents: string): string | undefined => {
   return undefined;
 };
 
+/**
+ * Finds a source entry in a subdirectory of `base`. A file at `kde/foo.desktop`
+ * has the id `kde-foo.desktop` under the desktop entry spec, and Vicinae names
+ * it `kde.foo.desktop`; both match.
+ */
+const findNestedSource = Effect.fn("findNestedSource")(function* (
+  base: string,
+  entryId: string
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+
+  const names = yield* fs.readDirectory(base, { recursive: true }).pipe(
+    Effect.catchReason("PlatformError", "NotFound", () =>
+      Effect.succeed<readonly string[]>([])
+    ),
+    Effect.mapError(failWith(`cannot list ${base}`))
+  );
+
+  for (const name of names) {
+    const segments = name.split(path.sep);
+
+    if (
+      segments.length > 1 &&
+      (segments.join("-") === entryId || segments.join(".") === entryId)
+    ) {
+      const candidate = path.join(base, name);
+
+      if (yield* isFile(candidate)) {
+        return Option.some(candidate);
+      }
+    }
+  }
+
+  return Option.none<string>();
+});
+
 /** Finds the first source entry, searching the user applications dir first. */
 const findSource = Effect.fn("findSource")(function* (entryId: string) {
   const path = yield* Path.Path;
@@ -213,6 +250,12 @@ const findSource = Effect.fn("findSource")(function* (entryId: string) {
 
     if (yield* isFile(candidate)) {
       return Option.some(candidate);
+    }
+
+    const nested = yield* findNestedSource(base, entryId);
+
+    if (Option.isSome(nested)) {
+      return nested;
     }
   }
 

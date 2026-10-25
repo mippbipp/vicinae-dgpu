@@ -404,6 +404,28 @@ layer(NodeServices.layer)("dGPU", (it) => {
     })
   );
 
+  it.effect("finds source entries in subdirectories", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+      const kde = harness.path.join(harness.sourceDir, "kde");
+
+      yield* harness.fs.makeDirectory(kde);
+      yield* harness.fs.writeFileString(
+        harness.path.join(kde, "konsole.desktop"),
+        "[Desktop Entry]\nName=Konsole\nExec=konsole\n"
+      );
+
+      // The desktop entry spec joins with "-", Vicinae with ".".
+      for (const entryId of ["kde-konsole.desktop", "kde.konsole.desktop"]) {
+        assert.strictEqual(yield* harness.dgpu.set(entryId, true), "added");
+        assert.include(
+          yield* readText(harness, wrapperPath(harness, entryId)),
+          `Exec=${OFFLOAD_PREFIX} konsole\n`
+        );
+      }
+    })
+  );
+
   it.effect("prefers the user applications directory over XDG sources", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness({ registryFixture: "one-app.json" });
