@@ -1,0 +1,31 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  esbuild: true
+  lefthook: true
+
+catalog:
+  "@types/node": 24.9.2
+  "@types/react": 19.2.17
+  esbuild: 0.28.2
+  oxfmt: 0.70.0
+  oxlint: 1.85.0
+  oxlint-tsgolint: 7.0.2003
+  typescript: 7.0.2
+  vitest: 5.0.5
+
+catalogs:
+  effect:
+    "@effect/platform-node": 4.0.6
+    "@effect/vitest": 4.0.6
+    effect: 4.0.6
+
+minimumReleaseAge: 1440
+
+# @effect/platform-node@4.0.6 declares `@effect/platform-node-shared: ^4.0.6`.
+# A later shared patch can need a newer effect than the catalog pins, so keep
+# the shared package on the catalog release. Bump it with `catalogs.effect`.
+overrides:
+  "@effect/platform-node-shared": 4.0.6

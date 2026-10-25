@@ -1,0 +1,22 @@
+{
+  "name": "@vicinae-dgpu/cli",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=cjs --outfile=dist/cli.cjs",
+    "clean": "git clean -xdf node_modules .turbo dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@effect/platform-node": "catalog:effect",
+    "@vicinae-dgpu/core": "workspace:*",
+    "effect": "catalog:effect"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@vicinae-dgpu/config": "workspace:*",
+    "esbuild": "catalog:",
+    "typescript": "catalog:"
+  }
+}

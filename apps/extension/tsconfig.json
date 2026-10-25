@@ -1,0 +1,7 @@
+{
+  "extends": "@vicinae-dgpu/config/tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  },
+  "include": ["src", "vicinae-env.d.ts"]
+}

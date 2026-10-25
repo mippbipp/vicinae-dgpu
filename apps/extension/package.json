@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
+  "name": "dgpu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Toggle per-app discrete GPU launch wrappers on NixOS.",
+  "categories": [
+    "Applications",
+    "System"
+  ],
+  "keywords": [
+    "dgpu",
+    "gpu",
+    "nixos",
+    "nvidia",
+    "prime",
+    "vicinae"
+  ],
+  "license": "MIT",
+  "author": "mippbipp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mippbipp/vicinae-dgpu.git"
+  },
+  "scripts": {
+    "build": "vici build --out dist",
+    "dev": "vici develop",
+    "clean": "git clean -xdf node_modules .turbo dist vicinae-env.d.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@effect/platform-node": "catalog:effect",
+    "@vicinae-dgpu/core": "workspace:*",
+    "@vicinae/api": "0.29.2",
+    "effect": "catalog:effect"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@vicinae-dgpu/config": "workspace:*",
+    "typescript": "catalog:"
+  },
+  "icon": "nvidia-settings.png",
+  "commands": [
+    {
+      "name": "apps",
+      "title": "Manage dGPU entries",
+      "description": "Add or remove dGPU launch entries for installed applications.",
+      "mode": "view"
+    }
+  ],
+  "platforms": [
+    "Linux"
+  ],
+  "title": "dGPU Apps"
+}

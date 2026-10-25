@@ -3,25 +3,19 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    vicinae = {
-      url = "github:vicinaehq/vicinae";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs =
-    { nixpkgs, ... }@inputs:
+    { nixpkgs, ... }:
     let
       systems = [
         "x86_64-linux"
         "aarch64-linux"
       ];
-
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system nixpkgs.legacyPackages.${system});
 
-      mkDgpu = pkgs: pkgs.callPackage ./package.nix { inherit inputs; };
-
-      homeManagerModule = import ./hm.nix { inherit inputs; };
+      mkDgpu = pkgs: pkgs.callPackage ./nix/package.nix { };
+      homeManagerModule = ./nix/hm.nix;
     in
     {
       packages = forAllSystems (
@@ -41,15 +35,17 @@
           dgpu = mkDgpu pkgs;
         in
         {
-          cli = dgpu.cli;
-          extension = dgpu.extension;
+          inherit (dgpu) cli extension;
         }
       );
 
       devShells = forAllSystems (
         system: pkgs: {
           default = pkgs.mkShell {
-            packages = [ pkgs.nodejs ];
+            packages = with pkgs; [
+              nodejs
+              pnpm
+            ];
           };
         }
       );

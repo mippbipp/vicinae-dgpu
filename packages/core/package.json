@@ -1,0 +1,27 @@
+{
+  "name": "@vicinae-dgpu/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./config": "./src/config.ts",
+    "./dgpu": "./src/dgpu.ts",
+    "./errors": "./src/errors.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "clean": "git clean -xdf node_modules .turbo coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "effect": "catalog:effect"
+  },
+  "devDependencies": {
+    "@effect/platform-node": "catalog:effect",
+    "@effect/vitest": "catalog:effect",
+    "@types/node": "catalog:",
+    "@vicinae-dgpu/config": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

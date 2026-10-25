@@ -1,0 +1,6 @@
+{
+  "extends": "@vicinae-dgpu/config/tsconfig.base.json",
+  // Root-owned files only
+  "include": ["*.config.ts"],
+  "exclude": ["node_modules"]
+}

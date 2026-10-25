@@ -1,0 +1,28 @@
+{
+  "name": "vicinae-dgpu",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare": "effect-tsgo patch --oxlint",
+    "clean": "pnpm run clean:ws && git clean -xdf node_modules .turbo",
+    "clean:ws": "turbo run clean --filter='!//'",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "ox": "turbo run lint format typecheck",
+    "ox:fix": "turbo run typecheck format:fix"
+  },
+  "devDependencies": {
+    "@effect/tsgo": "0.46.1",
+    "@oxlint/plugins": "1.85.0",
+    "@types/node": "catalog:",
+    "@vicinae-dgpu/config": "workspace:*",
+    "effect": "catalog:effect",
+    "lefthook": "2.1.14",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
+    "turbo": "2.11.7",
+    "typescript": "catalog:"
+  },
+  "packageManager": "pnpm@12.9.0"
+}

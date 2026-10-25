@@ -1,0 +1,51 @@
+{
+  "$schema": "https://v2-11-7.turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalTaskCommand": true,
+  },
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+    },
+    // Workspace packages export TypeScript source, so tests need no build.
+    "test": {},
+    // oxlint/oxfmt run from the repo root, so they are Root Tasks.
+    // `pnpm ox` and `pnpm ox:fix` are the only entry points.
+    // `lint` and `format` are independent checks, so they stay
+    // parallel; only the fixing variants are ordered, because `lint:fix`
+    // rewrites the files `format:fix` then has to format.
+    "//#lint": {
+      "command": ["oxlint"],
+    },
+    "//#lint:fix": {
+      "command": ["oxlint", "--fix", "--fix-suggestions", "--fix-dangerously"],
+      "cache": false,
+    },
+    "//#format": {
+      "command": ["oxfmt", "--check"],
+    },
+    "//#format:fix": {
+      "command": ["oxfmt", "--write"],
+      "dependsOn": ["//#lint:fix"],
+      "cache": false,
+    },
+    // Full `tsc --noEmit` for the root-owned files.
+    "//#typecheck": {
+      "command": ["tsc", "--noEmit", "-p", "tsconfig.json"],
+    },
+    // Full `tsc --noEmit` per package program
+    "typecheck": {
+      "dependsOn": ["^typecheck"],
+      "with": ["//#typecheck"],
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+    },
+    "clean": {
+      "cache": false,
+    },
+  },
+}
