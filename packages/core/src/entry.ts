@@ -35,7 +35,9 @@ const DESKTOP_EXT = ".desktop";
 
 const MAIN_GROUP = "[Desktop Entry]";
 
-const KEY_VALUE = /^(?<key>[A-Za-z0-9-]+)=(?<value>.*)$/u;
+// The spec allows a `[locale]` suffix on the key and spaces around `=`.
+const KEY_VALUE =
+  /^(?<key>[A-Za-z0-9-]+)(?<locale>\[[^\]]+\])?\s*=\s*(?<value>.*)$/u;
 
 const LINE_BREAK = /\r?\n/u;
 
@@ -47,6 +49,8 @@ const OFFLOAD_PREFIX = `${ENV_COMMAND}${OFFLOAD_ENV.join(" ")} `;
 
 interface KeyValue {
   readonly key: string;
+  /** `[de]` for `Name[de]=...`, or `""`. */
+  readonly locale: string;
   readonly value: string;
 }
 
@@ -71,7 +75,11 @@ const parseKeyValue = (line: string): KeyValue | undefined => {
     return undefined;
   }
 
-  return { key: groups.key ?? "", value: groups.value ?? "" };
+  return {
+    key: groups.key ?? "",
+    locale: groups.locale ?? "",
+    value: groups.value ?? "",
+  };
 };
 
 const entryFilename = (entryId: string): string => {
@@ -113,7 +121,7 @@ const rewriteMainGroupLine = (line: string): string | undefined => {
     case "Name":
       return entry.value.endsWith(ENTRY_SUFFIX)
         ? line
-        : `Name=${entry.value}${ENTRY_SUFFIX}`;
+        : `Name${entry.locale}=${entry.value}${ENTRY_SUFFIX}`;
     case "Exec":
       return `Exec=${addOffload(entry.value)}`;
     case MARKER_KEY:
@@ -171,7 +179,7 @@ const markedSourceId = (contents: string): string | undefined => {
     } else if (group === MAIN_GROUP) {
       const entry = parseKeyValue(line);
 
-      if (entry?.key === MARKER_KEY) {
+      if (entry?.key === MARKER_KEY && entry.locale === "") {
         return entry.value;
       }
     }
