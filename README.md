@@ -95,6 +95,8 @@ nix build .#extension
 
 `npm run build` uses `vici build` for the Vicinae extension. The CLI derivation runs the Vitest suite during `nix build`.
 
+`vici build` emits a CommonJS bundle. Do not add `"type": "module"` to `app/package.json`, or the Vicinae extension worker will fail at load time.
+
 ## License
 
 MIT

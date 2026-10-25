@@ -5,7 +5,6 @@
   "description": "Toggle per-app discrete GPU launch wrappers on NixOS.",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
   "categories": [
     "Applications",
     "System"
