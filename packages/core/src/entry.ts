@@ -1,4 +1,5 @@
 import { Effect, FileSystem, Option, Path, Result } from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { DgpuConfig } from "./config.js";
 import { DgpuError } from "./errors.js";
@@ -73,7 +74,7 @@ const parseKeyValue = (line: string): KeyValue | undefined => {
   return { key: groups.key ?? "", value: groups.value ?? "" };
 };
 
-export const entryFilename = (entryId: string): string => {
+const entryFilename = (entryId: string): string => {
   const stem = entryId.endsWith(DESKTOP_EXT)
     ? entryId.slice(0, -DESKTOP_EXT.length)
     : entryId;
@@ -312,4 +313,35 @@ export const reconcileEntries = Effect.fn("reconcileEntries")(function* (
   const reconciled: Reconciled = { statuses, failures };
 
   return reconciled;
+});
+
+/**
+ * Starts the app from its dGPU entry with `gio launch`, which expands the Exec
+ * field codes the way a launcher does.
+ */
+export const launchEntry = Effect.fn("launchEntry")(function* (
+  entryId: string
+) {
+  const path = yield* Path.Path;
+  const config = yield* DgpuConfig;
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const target = path.join(config.applicationsDir, entryFilename(entryId));
+
+  if (!isSourceEntryId(entryId) || !(yield* isFile(target))) {
+    return yield* DgpuError.make({ message: `${entryId} has no dGPU entry` });
+  }
+
+  return yield* spawner
+    .exitCode(ChildProcess.make("gio", ["launch", target]))
+    .pipe(
+      Effect.mapError((cause) =>
+        DgpuError.make({ message: `cannot run gio: ${cause.message}`, cause })
+      ),
+      Effect.filterOrFail(
+        (exitCode) => exitCode === ChildProcessSpawner.ExitCode(0),
+        (exitCode) =>
+          DgpuError.make({ message: `gio launch exited with code ${exitCode}` })
+      ),
+      Effect.asVoid
+    );
 });

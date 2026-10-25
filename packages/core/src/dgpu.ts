@@ -1,8 +1,9 @@
-import type { FileSystem } from "effect";
-import { Context, Effect, Layer, Path } from "effect";
+import type { FileSystem, Path } from "effect";
+import { Context, Effect, Layer } from "effect";
+import type { ChildProcessSpawner } from "effect/process";
 
-import { DgpuConfig } from "./config.js";
-import { entryFilename, isSourceEntryId, reconcileEntries } from "./entry.js";
+import type { DgpuConfig } from "./config.js";
+import { isSourceEntryId, launchEntry, reconcileEntries } from "./entry.js";
 import type { EntryStatus, Reconciled } from "./entry.js";
 import { DgpuError } from "./errors.js";
 import {
@@ -36,7 +37,8 @@ export interface DgpuService {
     entryId: string,
     on: boolean
   ) => Effect.Effect<EntryStatus, DgpuError>;
-  readonly wrapperPath: (entryId: string) => string;
+  /** Starts the app from its dGPU entry. Fails if it has none. */
+  readonly launch: (entryId: string) => Effect.Effect<void, DgpuError>;
 }
 
 const failOnFailures = (reconciled: Reconciled) =>
@@ -61,11 +63,11 @@ export class Dgpu extends Context.Service<Dgpu, DgpuService>()(
     Dgpu,
     Effect.gen(function* () {
       const context = yield* Effect.context<
-        DgpuConfig | FileSystem.FileSystem | Path.Path
+        | DgpuConfig
+        | FileSystem.FileSystem
+        | Path.Path
+        | ChildProcessSpawner.ChildProcessSpawner
       >();
-
-      const config = yield* DgpuConfig;
-      const path = yield* Path.Path;
 
       const reconcileRegistry = readRegistry.pipe(
         Effect.map(assignedDgpuIds),
@@ -126,8 +128,11 @@ export class Dgpu extends Context.Service<Dgpu, DgpuService>()(
         snapshot,
         reconcile,
         set,
-        wrapperPath: (entryId) =>
-          path.join(config.applicationsDir, entryFilename(entryId)),
+        launch: (entryId) =>
+          launchEntry(entryId).pipe(
+            Effect.withSpan("Dgpu.launch"),
+            Effect.provideContext(context)
+          ),
       });
     })
   );

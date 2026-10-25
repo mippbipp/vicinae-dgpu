@@ -19,10 +19,7 @@ import {
 } from "@vicinae/api";
 import type { Application } from "@vicinae/api";
 import { Effect, Layer, Match } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { useEffect, useState } from "react";
-
-type AppServices = Dgpu | ChildProcessSpawner.ChildProcessSpawner;
 
 interface ViewState {
   readonly apps: readonly Application[];
@@ -74,7 +71,7 @@ const NodeDgpu = NodeChildProcessSpawner.layer.pipe(
 
 const DgpuLive = Dgpu.layer.pipe(
   Layer.provide(DgpuConfig.layer),
-  Layer.provideMerge(NodeDgpu)
+  Layer.provide(NodeDgpu)
 );
 
 /**
@@ -83,7 +80,7 @@ const DgpuLive = Dgpu.layer.pipe(
  * building them, reaches `onFailure`.
  */
 const runAction = (
-  action: Effect.Effect<void, DgpuError, AppServices>,
+  action: Effect.Effect<void, DgpuError, Dgpu>,
   onFailure: (error: DgpuError) => Effect.Effect<void>
 ): void => {
   Effect.runFork(
@@ -192,23 +189,8 @@ const toggleEntry = (app: Application, on: boolean, setView: SetView) =>
 const launchOnDgpu = (app: Application) =>
   Effect.gen(function* () {
     const dgpu = yield* Dgpu;
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
-    yield* spawner
-      .exitCode(ChildProcess.make("gio", ["launch", dgpu.wrapperPath(app.id)]))
-      .pipe(
-        Effect.mapError((cause) =>
-          DgpuError.make({ message: `cannot run gio: ${cause.message}`, cause })
-        ),
-        Effect.filterOrFail(
-          (exitCode) => exitCode === ChildProcessSpawner.ExitCode(0),
-          (exitCode) =>
-            DgpuError.make({
-              message: `gio launch exited with code ${exitCode}`,
-            })
-        )
-      );
-
+    yield* dgpu.launch(app.id);
     yield* Effect.promise(() => closeMainWindow());
   });
 

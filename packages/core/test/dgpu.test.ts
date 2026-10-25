@@ -9,11 +9,13 @@ import {
   Option,
   Path,
   Schema,
+  Sink,
+  Stream,
 } from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { DgpuConfig } from "../src/config.js";
 import { Dgpu } from "../src/dgpu.js";
-import { entryFilename } from "../src/entry.js";
 
 const FIXTURES = new URL("fixtures/", import.meta.url);
 
@@ -25,7 +27,40 @@ const JsonDocument = Schema.fromJsonString(Schema.JsonObject);
 interface HarnessOptions {
   readonly registryFixture?: string | undefined;
   readonly registrySubpath?: string | undefined;
+  readonly launchExitCode?: number | undefined;
 }
+
+/** A spawner that records each command and exits with `exitCode`. */
+const recordingSpawner = (exitCode: number) => {
+  const commands: (readonly string[])[] = [];
+
+  const spawner = ChildProcessSpawner.make((command) =>
+    Effect.sync(() => {
+      if (ChildProcess.isStandardCommand(command)) {
+        commands.push([command.command, ...command.args]);
+      }
+
+      return ChildProcessSpawner.makeHandle({
+        pid: ChildProcessSpawner.ProcessId(1),
+        exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(exitCode)),
+        isRunning: Effect.succeed(false),
+        kill: () => Effect.void,
+        stdin: Sink.drain,
+        stdout: Stream.empty,
+        stderr: Stream.empty,
+        all: Stream.empty,
+        getInputFd: () => Sink.drain,
+        getOutputFd: () => Stream.empty,
+        unref: Effect.succeed(Effect.void),
+      });
+    })
+  );
+
+  return {
+    commands,
+    layer: Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+  };
+};
 
 const buildService = <I, S, E, R>(
   tag: Context.Key<I, S>,
@@ -69,9 +104,12 @@ const makeHarness = Effect.fn("makeHarness")(function* (
     sourceDirs: [sourceDir],
   });
 
+  const launcher = recordingSpawner(options.launchExitCode ?? 0);
+  const services = Layer.merge(configLayer, launcher.layer);
+
   const dgpu = yield* buildService(
     Dgpu,
-    Dgpu.layer.pipe(Layer.provide(configLayer))
+    Dgpu.layer.pipe(Layer.provide(services))
   );
 
   return {
@@ -83,13 +121,18 @@ const makeHarness = Effect.fn("makeHarness")(function* (
     registryPath,
     fixture,
     dgpu,
+    launched: launcher.commands,
   };
 });
 
 type Harness = Effect.Success<ReturnType<typeof makeHarness>>;
 
+/** The dGPU entry for `com.foo.desktop` is `com.foo (dGPU).desktop`. */
 const wrapperPath = (harness: Harness, entryId: string): string =>
-  harness.path.join(harness.applicationsDir, entryFilename(entryId));
+  harness.path.join(
+    harness.applicationsDir,
+    entryId.replace(/\.desktop$/u, " (dGPU).desktop")
+  );
 
 const readText = (harness: Harness, filePath: string) =>
   harness.fs.readFileString(filePath);
@@ -772,6 +815,54 @@ layer(NodeServices.layer)("dGPU", (it) => {
         "/usr/local/share/applications",
         "/usr/share/applications",
       ]);
+    })
+  );
+  it.effect("launch runs gio on the dGPU entry", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ registryFixture: "one-app.json" });
+
+      yield* harness.dgpu.reconcile;
+      yield* harness.dgpu.launch("com.visualstudio.code.desktop");
+
+      assert.deepStrictEqual(harness.launched, [
+        [
+          "gio",
+          "launch",
+          wrapperPath(harness, "com.visualstudio.code.desktop"),
+        ],
+      ]);
+    })
+  );
+
+  it.effect("launch fails for an app without a dGPU entry", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ registryFixture: "one-app.json" });
+
+      yield* harness.dgpu.reconcile;
+
+      const message = yield* failureMessage(
+        harness.dgpu.launch("org.mozilla.firefox.desktop")
+      );
+
+      assert.include(message, "has no dGPU entry");
+      assert.deepStrictEqual(harness.launched, []);
+    })
+  );
+
+  it.effect("launch reports a non-zero gio exit code", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({
+        registryFixture: "one-app.json",
+        launchExitCode: 2,
+      });
+
+      yield* harness.dgpu.reconcile;
+
+      const message = yield* failureMessage(
+        harness.dgpu.launch("com.visualstudio.code.desktop")
+      );
+
+      assert.include(message, "gio launch exited with code 2");
     })
   );
 });
