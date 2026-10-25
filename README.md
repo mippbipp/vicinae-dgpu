@@ -34,7 +34,6 @@ Add the flake input:
 vicinae-dgpu = {
   url = "github:mippbipp/vicinae-dgpu";
   inputs.nixpkgs.follows = "nixpkgs";
-  inputs.vicinae.follows = "vicinae";
 };
 ```
 
@@ -77,13 +76,19 @@ The source search order is the user applications directory, then `XDG_DATA_DIRS`
 
 ## Development
 
+Nix users: run `direnv allow` once so `.envrc` loads the flake's Node and pnpm.
+
 ```sh
-cd app
-npm ci
-npm test
-npm run typecheck
-npm run build
+pnpm install
+pnpm test
+pnpm ox
+pnpm build
 ```
+
+- `pnpm test` runs the Vitest suite in `packages/core`.
+- `pnpm ox` runs type-aware oxlint, the oxfmt check, and `tsc --noEmit` for each package and the root config files, all through Turbo. `pnpm ox:fix` applies lint fixes, then format fixes, and runs the same typecheck alongside. The lefthook pre-commit hook runs `pnpm ox:fix` when a commit stages TypeScript, JavaScript or JSON files, then re-stages the files it fixed.
+- `pnpm build` writes the CLI bundle to `apps/cli/dist/cli.cjs` and the extension to `apps/extension/dist`. It does not touch your installed Vicinae extensions.
+- `pnpm --filter dgpu dev` runs `vici develop` for a live extension session.
 
 Then build both Nix outputs from the repo root:
 
@@ -92,9 +97,24 @@ nix build .#cli
 nix build .#extension
 ```
 
-`npm run build` uses `vici build` for the Vicinae extension. The CLI derivation runs the Vitest suite during `nix build`.
+The CLI derivation runs the Vitest suite during `nix build`. Both derivations share one `fetchPnpmDeps` output, so a lockfile change needs a new `pnpmDeps` hash in `nix/package.nix`: set it to `""`, build, and copy the `got:` hash from the error.
 
-`vici build` emits a CommonJS bundle. Do not add `"type": "module"` to `app/package.json`, or the Vicinae extension worker will fail at load time.
+`vici build` emits a CommonJS bundle and typechecks the extension with its own TypeScript 5.9. Do not add `"type": "module"` to `apps/extension/package.json`, or the Vicinae extension worker will fail at load time.
+
+## Project structure
+
+```txt
+vicinae-dgpu/
+├── apps/
+│   ├── extension/   # Vicinae command (manifest, assets, src/apps.tsx)
+│   └── cli/         # dgpu CLI (effect/cli)
+├── packages/
+│   ├── core/        # registry, wrapper entries, reconcile; shared by both apps
+│   └── config/      # shared tsconfig.base.json
+├── tools/
+│   └── oxlint/      # vendored anti-slop oxlint plugins
+└── nix/             # package.nix (both outputs) and the Home Manager module
+```
 
 ## License
 
