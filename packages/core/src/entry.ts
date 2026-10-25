@@ -103,8 +103,20 @@ export const isSourceEntryId = (entryId: string): boolean =>
   !isEntryFilename(entryId) &&
   !entryId.includes("/");
 
-const addOffload = (value: string): string =>
-  `${OFFLOAD_PREFIX}${value.startsWith(ENV_COMMAND) ? value.slice(ENV_COMMAND.length) : value}`;
+/**
+ * Prefixes the offload variables. An existing `env NAME=VALUE ...` prefix is
+ * merged into ours. An `env` with options such as `-u` stays whole, because
+ * env stops reading options at the first `NAME=VALUE`.
+ */
+const addOffload = (exec: string): string => {
+  const rest = exec.startsWith(ENV_COMMAND)
+    ? exec.slice(ENV_COMMAND.length).trimStart()
+    : undefined;
+
+  return rest === undefined || rest.startsWith("-")
+    ? `${OFFLOAD_PREFIX}${exec}`
+    : `${OFFLOAD_PREFIX}${rest}`;
+};
 
 /**
  * Rewrites one `[Desktop Entry]` line for the dGPU entry. Returns `undefined`

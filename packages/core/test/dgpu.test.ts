@@ -381,6 +381,29 @@ layer(NodeServices.layer)("dGPU", (it) => {
     })
   );
 
+  it.effect("keeps an env prefix with options whole", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ registryFixture: "one-app.json" });
+
+      yield* harness.fs.writeFileString(
+        harness.path.join(harness.sourceDir, "com.visualstudio.code.desktop"),
+        "[Desktop Entry]\nName=Code\nExec=env -u WAYLAND_DISPLAY code %U\n"
+      );
+
+      yield* harness.dgpu.reconcile;
+
+      const content = yield* readText(
+        harness,
+        wrapperPath(harness, "com.visualstudio.code.desktop")
+      );
+
+      assert.include(
+        content,
+        `Exec=${OFFLOAD_PREFIX} env -u WAYLAND_DISPLAY code %U\n`
+      );
+    })
+  );
+
   it.effect("prefers the user applications directory over XDG sources", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness({ registryFixture: "one-app.json" });
