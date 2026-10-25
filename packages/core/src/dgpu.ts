@@ -32,7 +32,11 @@ export interface DgpuService {
   ) => Effect.Effect<Snapshot, DgpuError>;
   /** Reconciles, and fails if any dGPU entry could not be updated. */
   readonly reconcile: Effect.Effect<void, DgpuError>;
-  /** Assigns or unassigns one app, reconciles, and returns its status. */
+  /**
+   * Assigns or unassigns one app, reconciles, and returns its status. Fails
+   * only if this app's own dGPU entry could not be updated; a broken entry for
+   * another app shows up in the next snapshot instead.
+   */
   readonly set: (
     entryId: string,
     on: boolean
@@ -41,15 +45,18 @@ export interface DgpuService {
   readonly launch: (entryId: string) => Effect.Effect<void, DgpuError>;
 }
 
-const failOnFailures = (reconciled: Reconciled) =>
-  reconciled.failures.length === 0
+const failOnFailures = (reconciled: Reconciled) => {
+  const failures = [...reconciled.failures.values()];
+
+  return failures.length === 0
     ? Effect.void
     : Effect.fail(
         DgpuError.make({
-          message: reconciled.failures.map((error) => error.message).join("; "),
-          cause: reconciled.failures,
+          message: failures.map((error) => error.message).join("; "),
+          cause: failures,
         })
       );
+};
 
 /**
  * Filesystem-backed dGPU domain service. The Vicinae command and the CLI both
@@ -86,7 +93,10 @@ export class Dgpu extends Context.Service<Dgpu, DgpuService>()(
           }
         }
 
-        const result: Snapshot = { statuses, failures: reconciled.failures };
+        const result: Snapshot = {
+          statuses,
+          failures: [...reconciled.failures.values()],
+        };
 
         return result;
       }, Effect.provideContext(context));
@@ -117,7 +127,11 @@ export class Dgpu extends Context.Service<Dgpu, DgpuService>()(
           assignedDgpuIds(next.registry)
         );
 
-        yield* failOnFailures(reconciled);
+        const failure = reconciled.failures.get(entryId);
+
+        if (failure !== undefined) {
+          return yield* failure;
+        }
 
         const status: EntryStatus = reconciled.statuses.get(entryId) ?? "none";
 

@@ -531,25 +531,74 @@ layer(NodeServices.layer)("dGPU", (it) => {
     })
   );
 
-  it.effect("set off clears an assignment the reconcile rejects", () =>
+  it.effect("ignores registry ids that are not source entry ids", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();
-      const invalid = "com.visualstudio.code (dGPU).desktop";
 
+      // A stray key like this one broke every toggle on a real registry.
       yield* harness.fs.writeFileString(
         harness.registryPath,
-        `{"apps": {"${invalid}": "dGPU"}}`
+        '{"apps": {"set": "dGPU", "com.visualstudio.code (dGPU).desktop": "dGPU"}}'
       );
 
-      assert.include(
-        yield* failureMessage(harness.dgpu.reconcile),
-        "is not a source desktop entry id"
-      );
-
-      yield* harness.dgpu.set(invalid, false);
       yield* harness.dgpu.reconcile;
 
-      assert.deepStrictEqual((yield* readRegistryJson(harness)).apps, {});
+      assert.strictEqual(
+        yield* harness.dgpu.set("org.mozilla.firefox.desktop", true),
+        "added"
+      );
+      assert.deepStrictEqual(
+        yield* directoryEntries(harness, harness.applicationsDir),
+        ["org.mozilla.firefox (dGPU).desktop"]
+      );
+
+      yield* harness.dgpu.set("set", false);
+
+      assert.deepStrictEqual((yield* readRegistryJson(harness)).apps, {
+        "com.visualstudio.code (dGPU).desktop": "dGPU",
+        "org.mozilla.firefox.desktop": "dGPU",
+      });
+    })
+  );
+
+  it.effect("set succeeds while another dGPU entry is broken", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ registryFixture: "one-app.json" });
+
+      // A directory where the file should go makes the write fail.
+      yield* harness.fs.makeDirectory(
+        wrapperPath(harness, "com.visualstudio.code.desktop")
+      );
+
+      assert.strictEqual(
+        yield* harness.dgpu.set("org.mozilla.firefox.desktop", true),
+        "added"
+      );
+      assert.strictEqual(
+        yield* harness.dgpu.set("org.mozilla.firefox.desktop", false),
+        "none"
+      );
+      assert.isFalse(
+        yield* harness.fs.exists(
+          wrapperPath(harness, "org.mozilla.firefox.desktop")
+        )
+      );
+    })
+  );
+
+  it.effect("set fails when its own dGPU entry cannot be written", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+
+      yield* harness.fs.makeDirectory(
+        wrapperPath(harness, "org.mozilla.firefox.desktop")
+      );
+
+      const message = yield* failureMessage(
+        harness.dgpu.set("org.mozilla.firefox.desktop", true)
+      );
+
+      assert.include(message, "cannot write");
     })
   );
 

@@ -93,6 +93,10 @@ const entryFilename = (entryId: string): string => {
 const isEntryFilename = (name: string): boolean =>
   name.endsWith(`${ENTRY_SUFFIX}${DESKTOP_EXT}`);
 
+/** The source entry id a dGPU entry's filename implies. */
+const filenameSourceId = (name: string): string =>
+  `${name.slice(0, -`${ENTRY_SUFFIX}${DESKTOP_EXT}`.length)}${DESKTOP_EXT}`;
+
 /**
  * Whether `entryId` names an app's own desktop entry: a desktop file id that
  * is not itself a dGPU entry and cannot escape the applications dir.
@@ -270,12 +274,6 @@ const syncEntry = Effect.fn("syncEntry")(function* (
   DgpuError,
   DgpuConfig | FileSystem.FileSystem | Path.Path
 > {
-  if (!isSourceEntryId(entryId)) {
-    return yield* DgpuError.make({
-      message: `the registry assigns ${entryId}, which is not a source desktop entry id`,
-    });
-  }
-
   const path = yield* Path.Path;
   const config = yield* DgpuConfig;
   const source = yield* findSource(entryId);
@@ -318,17 +316,18 @@ const removeIfStale = Effect.fn("removeIfStale")(function* (
 });
 
 export interface Reconciled {
-  /** The status of every assigned id. */
+  /** The status of every assigned source entry id. */
   readonly statuses: ReadonlyMap<string, AssignedStatus>;
-  /** Entries that could not be written, read or removed. */
-  readonly failures: readonly DgpuError[];
+  /** Why an entry could not be written, read or removed, by source entry id. */
+  readonly failures: ReadonlyMap<string, DgpuError>;
 }
 
 /**
  * Writes a dGPU entry for every assigned id whose source entry exists, then
- * removes the dGPU entries this tool owns that no longer have one. A failure
- * on one entry does not stop the others or the sweep; it is reported in
- * `failures`. Only a failure on the applications dir itself fails the run.
+ * removes the dGPU entries this tool owns that no longer have one. Assigned
+ * ids that are not source entry ids are ignored, like non-dGPU values. A
+ * failure on one entry does not stop the others or the sweep; it is reported
+ * in `failures`. Only a failure on the applications dir itself fails the run.
  */
 export const reconcileEntries = Effect.fn("reconcileEntries")(function* (
   assigned: ReadonlySet<string>
@@ -337,20 +336,22 @@ export const reconcileEntries = Effect.fn("reconcileEntries")(function* (
   const path = yield* Path.Path;
   const { applicationsDir } = yield* DgpuConfig;
   const statuses = new Map<string, AssignedStatus>();
-  const failures: DgpuError[] = [];
+  const failures = new Map<string, DgpuError>();
 
   yield* fs
     .makeDirectory(applicationsDir, { recursive: true })
     .pipe(Effect.mapError(failWith(`cannot create ${applicationsDir}`)));
 
   for (const entryId of assigned) {
-    const result = yield* Effect.result(syncEntry(entryId));
+    if (isSourceEntryId(entryId)) {
+      const result = yield* Effect.result(syncEntry(entryId));
 
-    if (Result.isSuccess(result)) {
-      statuses.set(entryId, result.success);
-    } else {
-      statuses.set(entryId, "failed");
-      failures.push(result.failure);
+      if (Result.isSuccess(result)) {
+        statuses.set(entryId, result.success);
+      } else {
+        statuses.set(entryId, "failed");
+        failures.set(entryId, result.failure);
+      }
     }
   }
 
@@ -371,8 +372,10 @@ export const reconcileEntries = Effect.fn("reconcileEntries")(function* (
         removeIfStale(path.join(applicationsDir, name), keep)
       );
 
-      if (Result.isFailure(result)) {
-        failures.push(result.failure);
+      const sourceId = filenameSourceId(name);
+
+      if (Result.isFailure(result) && !failures.has(sourceId)) {
+        failures.set(sourceId, result.failure);
       }
     }
   }
