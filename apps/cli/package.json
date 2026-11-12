@@ -4,19 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/cli.ts --bundle --platform=node --format=cjs --outfile=dist/cli.cjs",
+    "build": "bun build src/cli.ts --target=bun --outfile=dist/cli.js",
     "clean": "git clean -xdf node_modules .turbo dist",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@effect/platform-node": "catalog:effect",
+    "@effect/platform-bun": "catalog:effect",
     "@vicinae-dgpu/core": "workspace:*",
     "effect": "catalog:effect"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
+    "@types/bun": "catalog:",
     "@vicinae-dgpu/config": "workspace:*",
-    "esbuild": "catalog:",
     "typescript": "catalog:"
   }
 }

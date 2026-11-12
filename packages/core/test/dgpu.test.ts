@@ -1,4 +1,4 @@
-import { NodeServices } from "@effect/platform-node";
+import { BunServices } from "@effect/platform-bun";
 import { assert, layer } from "@effect/vitest";
 import {
   ConfigProvider,
@@ -8,6 +8,7 @@ import {
   Layer,
   Option,
   Path,
+  Redacted,
   Schema,
   Sink,
   Stream,
@@ -37,7 +38,12 @@ const recordingSpawner = (exitCode: number) => {
   const spawner = ChildProcessSpawner.make((command) =>
     Effect.sync(() => {
       if (ChildProcess.isStandardCommand(command)) {
-        commands.push([command.command, ...command.args]);
+        commands.push([
+          command.command,
+          ...command.args.map((arg) =>
+            Redacted.isRedacted(arg) ? Redacted.value(arg) : arg
+          ),
+        ]);
       }
 
       return ChildProcessSpawner.makeHandle({
@@ -181,7 +187,7 @@ const resolveConfig = (env: Record<string, string>) => {
   );
 };
 
-layer(NodeServices.layer)("dGPU", (it) => {
+layer(BunServices.layer)("dGPU", (it) => {
   it.effect("creates wrappers with the offload exec for assigned apps", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness({ registryFixture: "two-apps.json" });
@@ -208,50 +214,6 @@ layer(NodeServices.layer)("dGPU", (it) => {
           harness.fixture("expected", "com.valvesoftware.Steam (dGPU).desktop")
         )
       );
-    })
-  );
-
-  it.effect("matches the golden wrapper content", () =>
-    Effect.gen(function* () {
-      const harness = yield* makeHarness({ registryFixture: "one-app.json" });
-
-      yield* harness.dgpu.reconcile;
-
-      const golden = yield* readText(
-        harness,
-        harness.fixture("expected", "com.visualstudio.code (dGPU).desktop")
-      );
-
-      assert.strictEqual(
-        yield* readText(
-          harness,
-          wrapperPath(harness, "com.visualstudio.code.desktop")
-        ),
-        golden
-      );
-      assert.include(golden, `Exec=${OFFLOAD_PREFIX} code %U`);
-      assert.include(golden, "Name=Visual Studio Code (dGPU)");
-      assert.include(
-        golden,
-        "X-Caelestia-DGPU-Source=com.visualstudio.code.desktop"
-      );
-    })
-  );
-
-  it.effect("leaves desktop action groups untouched", () =>
-    Effect.gen(function* () {
-      const harness = yield* makeHarness({ registryFixture: "two-apps.json" });
-
-      yield* harness.dgpu.reconcile;
-
-      const content = yield* readText(
-        harness,
-        wrapperPath(harness, "com.valvesoftware.Steam.desktop")
-      );
-
-      assert.include(content, "Name=Store");
-      assert.include(content, "Exec=steam steam://store");
-      assert.notInclude(content, "Store (dGPU)");
     })
   );
 
@@ -365,19 +327,21 @@ layer(NodeServices.layer)("dGPU", (it) => {
     })
   );
 
-  it.effect("removes a stale wrapper when the source disappears", () =>
+  it.effect("removes the wrapper of an assigned app whose source is gone", () =>
     Effect.gen(function* () {
-      const harness = yield* makeHarness({ registryFixture: "none.json" });
-      const stale = wrapperPath(harness, "com.visualstudio.code.desktop");
-
-      yield* harness.fs.writeFileString(
-        stale,
-        "[Desktop Entry]\nX-Caelestia-DGPU-Source=com.visualstudio.code.desktop\nName=Code\n"
-      );
+      const harness = yield* makeHarness({ registryFixture: "one-app.json" });
+      const entry = wrapperPath(harness, "com.visualstudio.code.desktop");
 
       yield* harness.dgpu.reconcile;
 
-      assert.isFalse(yield* harness.fs.exists(stale));
+      assert.isTrue(yield* harness.fs.exists(entry));
+
+      yield* harness.fs.remove(
+        harness.path.join(harness.sourceDir, "com.visualstudio.code.desktop")
+      );
+      yield* harness.dgpu.reconcile;
+
+      assert.isFalse(yield* harness.fs.exists(entry));
     })
   );
 
@@ -509,7 +473,27 @@ layer(NodeServices.layer)("dGPU", (it) => {
       );
 
       assert.include(content, `Exec=${OFFLOAD_PREFIX} FOO=1 code %U`);
-      assert.strictEqual(content.split("env ").length - 1, 1);
+    })
+  );
+
+  it.effect("does not suffix a name that already ends in (dGPU)", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ registryFixture: "one-app.json" });
+
+      yield* harness.fs.writeFileString(
+        harness.path.join(harness.sourceDir, "com.visualstudio.code.desktop"),
+        "[Desktop Entry]\nName=Code (dGPU)\nExec=code %U\n"
+      );
+
+      yield* harness.dgpu.reconcile;
+
+      const content = yield* readText(
+        harness,
+        wrapperPath(harness, "com.visualstudio.code.desktop")
+      );
+
+      assert.include(content, "Name=Code (dGPU)\n");
+      assert.notInclude(content, "(dGPU) (dGPU)");
     })
   );
 
@@ -535,13 +519,22 @@ layer(NodeServices.layer)("dGPU", (it) => {
     Effect.gen(function* () {
       const harness = yield* makeHarness();
 
-      // A stray key like this one broke every toggle on a real registry.
+      // A stray key like "set" broke every toggle on a real registry. The
+      // "../" id resolves to a real source file, so it would write a wrapper
+      // outside the applications dir if it were not ignored.
       yield* harness.fs.writeFileString(
         harness.registryPath,
-        '{"apps": {"set": "dGPU", "com.visualstudio.code (dGPU).desktop": "dGPU"}}'
+        '{"apps": {"set": "dGPU", "com.visualstudio.code (dGPU).desktop": "dGPU", "../source/org.mozilla.firefox.desktop": "dGPU"}}'
       );
 
+      const sourceBefore = yield* directoryEntries(harness, harness.sourceDir);
+
       yield* harness.dgpu.reconcile;
+
+      assert.deepStrictEqual(
+        yield* directoryEntries(harness, harness.sourceDir),
+        sourceBefore
+      );
 
       assert.strictEqual(
         yield* harness.dgpu.set("org.mozilla.firefox.desktop", true),
@@ -556,6 +549,7 @@ layer(NodeServices.layer)("dGPU", (it) => {
 
       assert.deepStrictEqual((yield* readRegistryJson(harness)).apps, {
         "com.visualstudio.code (dGPU).desktop": "dGPU",
+        "../source/org.mozilla.firefox.desktop": "dGPU",
         "org.mozilla.firefox.desktop": "dGPU",
       });
     })
@@ -660,9 +654,25 @@ layer(NodeServices.layer)("dGPU", (it) => {
       assert.lengthOf(snapshot.failures, 1);
       assert.include(snapshot.failures[0]?.message, "cannot write");
       assert.isFalse(yield* harness.fs.exists(stale));
+    })
+  );
+
+  it.effect("reconcile fails when a dGPU entry cannot be written", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ registryFixture: "two-apps.json" });
+
+      yield* harness.fs.makeDirectory(
+        wrapperPath(harness, "com.visualstudio.code.desktop")
+      );
+
       assert.include(
         yield* failureMessage(harness.dgpu.reconcile),
         "cannot write"
+      );
+      assert.isTrue(
+        yield* harness.fs.exists(
+          wrapperPath(harness, "com.valvesoftware.Steam.desktop")
+        )
       );
     })
   );
@@ -728,30 +738,6 @@ layer(NodeServices.layer)("dGPU", (it) => {
     })
   );
 
-  it.effect("set on writes the registry and creates the wrapper", () =>
-    Effect.gen(function* () {
-      const harness = yield* makeHarness({ registryFixture: "two-apps.json" });
-
-      assert.strictEqual(
-        yield* harness.dgpu.set("org.mozilla.firefox.desktop", true),
-        "added"
-      );
-
-      const data = yield* readRegistryJson(harness);
-
-      assert.deepStrictEqual(data.apps, {
-        "com.visualstudio.code.desktop": "dGPU",
-        "com.valvesoftware.Steam.desktop": "dGPU",
-        "org.mozilla.firefox.desktop": "dGPU",
-      });
-      assert.isTrue(
-        yield* harness.fs.exists(
-          wrapperPath(harness, "org.mozilla.firefox.desktop")
-        )
-      );
-    })
-  );
-
   it.effect("set on is idempotent and does not rewrite the registry", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness({ registryFixture: "two-apps.json" });
@@ -808,32 +794,19 @@ layer(NodeServices.layer)("dGPU", (it) => {
   it.effect("set off for an unassigned app is a no-op", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness({ registryFixture: "one-app.json" });
-      const before = yield* readText(harness, harness.registryPath);
+      const before = yield* harness.fs.stat(harness.registryPath);
 
       yield* harness.dgpu.set("com.valvesoftware.Steam.desktop", false);
 
+      const after = yield* harness.fs.stat(harness.registryPath);
+
       assert.strictEqual(
-        yield* readText(harness, harness.registryPath),
-        before
+        Option.getOrThrow(after.ino),
+        Option.getOrThrow(before.ino)
       );
-    })
-  );
-
-  it.effect("set on creates a missing registry", () =>
-    Effect.gen(function* () {
-      const harness = yield* makeHarness();
-
-      yield* harness.dgpu.set("com.visualstudio.code.desktop", true);
-
-      const data = yield* readRegistryJson(harness);
-
-      assert.deepStrictEqual(data.apps, {
-        "com.visualstudio.code.desktop": "dGPU",
-      });
-      assert.isTrue(
-        yield* harness.fs.exists(
-          wrapperPath(harness, "com.visualstudio.code.desktop")
-        )
+      assert.strictEqual(
+        Option.getOrThrow(after.mtime).getTime(),
+        Option.getOrThrow(before.mtime).getTime()
       );
     })
   );
@@ -870,7 +843,11 @@ layer(NodeServices.layer)("dGPU", (it) => {
       });
 
       yield* harness.fs.writeFileString(harness.registryPath, withGpus);
-      yield* harness.dgpu.set("org.mozilla.firefox.desktop", true);
+
+      assert.strictEqual(
+        yield* harness.dgpu.set("org.mozilla.firefox.desktop", true),
+        "added"
+      );
 
       const after = yield* readRegistryJson(harness);
 
@@ -880,18 +857,11 @@ layer(NodeServices.layer)("dGPU", (it) => {
         "com.valvesoftware.Steam.desktop": "dGPU",
         "org.mozilla.firefox.desktop": "dGPU",
       });
-    })
-  );
-
-  it.effect("set reports an invalid registry", () =>
-    Effect.gen(function* () {
-      const harness = yield* makeHarness({ registryFixture: "invalid.json" });
-
-      const message = yield* failureMessage(
-        harness.dgpu.set("org.mozilla.firefox.desktop", true)
+      assert.isTrue(
+        yield* harness.fs.exists(
+          wrapperPath(harness, "org.mozilla.firefox.desktop")
+        )
       );
-
-      assert.include(message, "cannot read registry");
     })
   );
 

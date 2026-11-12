@@ -1,4 +1,4 @@
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { DgpuConfig } from "@vicinae-dgpu/core/config";
 import { Dgpu } from "@vicinae-dgpu/core/dgpu";
 import { Console, Effect, Layer, Option } from "effect";
@@ -81,7 +81,7 @@ const root = Command.make(
 const main = root.pipe(
   Command.run({ version: "1.0.0" }),
   // oxlint-disable-next-line effecttsgo/strict-effect-provide -- process entry point
-  Effect.provide(NodeServices.layer)
+  Effect.provide(BunServices.layer)
 );
 
-NodeRuntime.runMain(main);
+BunRuntime.runMain(main);

@@ -1,6 +1,7 @@
+packages:
 { pkgs, ... }:
 {
   home.packages = [
-    (pkgs.callPackage ./package.nix { }).cli
+    packages.${pkgs.stdenv.hostPlatform.system}.cli
   ];
 }

@@ -9,7 +9,7 @@
     "./errors": "./src/errors.ts"
   },
   "scripts": {
-    "test": "vitest run",
+    "test": "bun --bun vitest run",
     "clean": "git clean -xdf node_modules .turbo coverage",
     "typecheck": "tsc --noEmit"
   },
@@ -17,9 +17,9 @@
     "effect": "catalog:effect"
   },
   "devDependencies": {
-    "@effect/platform-node": "catalog:effect",
+    "@effect/platform-bun": "catalog:effect",
     "@effect/vitest": "catalog:effect",
-    "@types/node": "catalog:",
+    "@types/bun": "catalog:",
     "@vicinae-dgpu/config": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -12,9 +12,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/setup@v3
-        with:
-          cache: true
-          require-lockfile: true
+      - uses: oven-sh/setup-bun@v2
 
-      - run: pnpm ox
+      - run: bun install --frozen-lockfile
+      - run: bun run ox

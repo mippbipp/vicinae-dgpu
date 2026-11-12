@@ -23,15 +23,15 @@
     "url": "https://github.com/mippbipp/vicinae-dgpu.git"
   },
   "scripts": {
-    "build": "vici build --out dist",
-    "dev": "vici develop",
+    "build": "bun --bun vici build --out dist",
+    "dev": "bun --bun vici develop",
     "clean": "git clean -xdf node_modules .turbo dist vicinae-env.d.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@effect/platform-node": "catalog:effect",
     "@vicinae-dgpu/core": "workspace:*",
-    "@vicinae/api": "0.29.2",
+    "@vicinae/api": "0.30.0",
     "effect": "catalog:effect"
   },
   "devDependencies": {

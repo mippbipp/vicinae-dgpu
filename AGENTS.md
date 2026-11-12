@@ -16,7 +16,8 @@ guide doesn't cover, search through the source code in `node_modules/effect/src`
 
 - `apps/extension/package.json` is the Vicinae manifest. Its `name` (`dgpu`) is the installed extension directory, and the Nix derivation name must match it. Keep the package CommonJS (no `"type": "module"`): `vici build` emits a CJS bundle.
 - `vici build` typechecks the extension, including the `packages/core` sources it imports, with its bundled TypeScript 5.9. Code in both must compile there as well as under the workspace TypeScript.
-- Any `pnpm-lock.yaml` change needs a new `pnpmDeps` hash in `nix/package.nix`. Set it to `""`, run `nix build .#cli`, and copy the `got:` hash.
+- `bun.lock` changes must be committed together with the regenerated `bun.nix`. `bun install` regenerates it through the `postinstall` script when `bun2nix` is on `PATH` (the dev shell provides it). Otherwise run `bun2nix -o bun.nix`.
+- The extension runs in Vicinae's Node.js worker, not Bun. Keep `apps/extension` on `@effect/platform-node` and free of Bun APIs. The CLI and the core tests use `@effect/platform-bun`.
 
 ## Agent skills
 

@@ -18,12 +18,9 @@ export interface DgpuConfigOverrides {
 
 const SYSTEM_DATA_DIRS = ["/usr/local/share", "/usr/share"];
 
-// The XDG base directory spec treats an empty variable the same as an unset one.
-const xdgVariable = (name: string) =>
-  Config.String(name).pipe(
-    Config.option,
-    Config.map(Option.filter((value) => value.length > 0))
-  );
+// The XDG base directory spec treats an empty variable the same as an unset
+// one. ConfigProvider.fromEnv already reads an empty value as missing.
+const xdgVariable = (name: string) => Config.String(name).pipe(Config.option);
 
 const Environment = Config.all({
   home: xdgVariable("HOME"),

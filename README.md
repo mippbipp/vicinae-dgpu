@@ -79,19 +79,19 @@ The source search order is the user applications directory, then `XDG_DATA_DIRS`
 
 ## Development
 
-Nix users: run `direnv allow` once so `.envrc` loads the flake's Node and pnpm.
+Nix users: run `direnv allow` once so `.envrc` loads the flake's Bun and bun2nix.
 
 ```sh
-pnpm install
-pnpm test
-pnpm ox
-pnpm build
+bun install
+bun run test
+bun run ox
+bun run build
 ```
 
-- `pnpm test` runs the Vitest suite in `packages/core`.
-- `pnpm ox` runs type-aware oxlint, the oxfmt check, and `tsc --noEmit` for each package and the root config files, all through Turbo. `pnpm ox:fix` applies lint fixes, then format fixes, and runs the same typecheck alongside. The lefthook pre-commit hook runs `pnpm ox:fix` when a commit stages TypeScript, JavaScript or JSON files, then re-stages the files it fixed.
-- `pnpm build` writes the CLI bundle to `apps/cli/dist/cli.cjs` and the extension to `apps/extension/dist`. It does not touch your installed Vicinae extensions.
-- `pnpm --filter dgpu dev` runs `vici develop` for a live extension session.
+- `bun run test` runs the Vitest suite in `packages/core` under Bun.
+- `bun run ox` runs type-aware oxlint, the oxfmt check, and `tsc --noEmit` for each package and the root config files, all through Turbo. `bun run ox:fix` applies lint fixes, then format fixes, and runs the same typecheck alongside. The lefthook pre-commit hook runs `bun run ox:fix` when a commit stages TypeScript, JavaScript or JSON files, then re-stages the files it fixed.
+- `bun run build` writes the CLI bundle to `apps/cli/dist/cli.js` and the extension to `apps/extension/dist`. It does not touch your installed Vicinae extensions.
+- `bun run --filter dgpu dev` runs `vici develop` for a live extension session.
 
 Then build both Nix outputs from the repo root:
 
@@ -100,7 +100,9 @@ nix build .#cli
 nix build .#extension
 ```
 
-The CLI derivation runs the Vitest suite during `nix build`. Both derivations share one `fetchPnpmDeps` output, so a lockfile change needs a new `pnpmDeps` hash in `nix/package.nix`: set it to `""`, build, and copy the `got:` hash from the error.
+The CLI derivation runs the Vitest suite during `nix build`. Both derivations install dependencies from `bun.nix`, which the `postinstall` script regenerates from `bun.lock` on every `bun install`. Commit `bun.nix` with any lockfile change. The script skips regeneration when `bun2nix` is not on `PATH`.
+
+The CLI runs on Bun and uses `@effect/platform-bun`. The extension does not: Bun builds it, but Vicinae loads the bundle into its own Node.js worker, so `apps/extension` stays on `@effect/platform-node` and must not use Bun APIs.
 
 `vici build` emits a CommonJS bundle and typechecks the extension with its own TypeScript 5.9. Do not add `"type": "module"` to `apps/extension/package.json`, or the Vicinae extension worker will fail at load time.
 

@@ -77,6 +77,18 @@ export default defineConfig({
     // dual (data-first/data-last) signatures are for published libraries;
     // these workspace packages give each helper one call style
     "effecttsgo/missing-pipeable-signature": "off",
+    // The rules below come from tsgo's opt-in presets (maintainers, style,
+    // effectNative), not `recommended`. They only run because tsgo files its
+    // rules under the restriction category, which is set to "warn" above.
+    // Maintainers rule aimed at published API stability; these packages are private.
+    "effecttsgo/api-stability-leak": "off",
+    // Upstream default is off; `assert(yield* read(...))` reads fine in tests.
+    "effecttsgo/yield-in-call-argument": "off",
+    // Swaps native string, array and record methods for effect/* equivalents
+    // with the same behavior here.
+    "effecttsgo/prefer-effect-array": "off",
+    "effecttsgo/prefer-effect-record": "off",
+    "effecttsgo/prefer-effect-string": "off",
 
     // --- builtin plugin preferences ---
 

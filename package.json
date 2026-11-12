@@ -1,10 +1,35 @@
 {
   "name": "vicinae-dgpu",
   "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "@types/bun": "1.4.4",
+      "@types/node": "24.19.2",
+      "@types/react": "19.3.0",
+      "oxfmt": "0.78.0",
+      "oxlint": "1.93.0",
+      "oxlint-tsgolint": "7.0.2006",
+      "typescript": "7.0.2",
+      "vitest": "5.1.0"
+    },
+    "catalogs": {
+      "effect": {
+        "@effect/platform-bun": "4.1.4",
+        "@effect/platform-node": "4.1.4",
+        "@effect/vitest": "4.1.4",
+        "effect": "4.1.4"
+      }
+    }
+  },
   "type": "module",
   "scripts": {
     "prepare": "effect-tsgo patch --oxlint",
-    "clean": "pnpm run clean:ws && git clean -xdf node_modules .turbo",
+    "postinstall": "command -v bun2nix >/dev/null || exit 0; bun2nix -o bun.nix",
+    "clean": "bun run clean:ws && git clean -xdf node_modules .turbo",
     "clean:ws": "turbo run clean --filter='!//'",
     "build": "turbo run build",
     "test": "turbo run test",
@@ -12,17 +37,21 @@
     "ox:fix": "turbo run typecheck format:fix"
   },
   "devDependencies": {
-    "@effect/tsgo": "0.46.1",
-    "@oxlint/plugins": "1.85.0",
+    "@effect/tsgo": "0.68.0",
+    "@oxlint/plugins": "1.93.0",
     "@types/node": "catalog:",
     "@vicinae-dgpu/config": "workspace:*",
     "effect": "catalog:effect",
-    "lefthook": "2.1.14",
+    "lefthook": "2.2.2",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
-    "turbo": "2.11.7",
+    "turbo": "2.11.11",
     "typescript": "catalog:"
   },
-  "packageManager": "pnpm@12.9.0"
+  "packageManager": "bun@1.4.2",
+  "trustedDependencies": [
+    "esbuild",
+    "lefthook"
+  ]
 }

@@ -21,7 +21,17 @@
     "types": ["node"],
     "plugins": [
       {
-        "name": "@effect/language-service"
+        "name": "@effect/language-service",
+        "allowedUnstableApis": [
+          "effect/FileSystem",
+          "effect/Path",
+          "effect/cli",
+          "effect/process",
+          "@effect/platform-bun",
+          "@effect/platform-node",
+          "@effect/platform-node-shared",
+          "@effect/vitest"
+        ]
       }
     ]
   }
